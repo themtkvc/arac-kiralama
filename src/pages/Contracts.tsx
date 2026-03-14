@@ -55,13 +55,15 @@ export default function Contracts() {
   const watchVat = watch('vat_applied')
   const watchVehicle = watch('vehicle_id')
 
+  // Calculated values
   const months = (watchStart && watchEnd) ? Math.max(0, calcMonths(watchStart, watchEnd)) : 0
   const baseAmount = months * Number(watchRate || 0)
   const vatAmount = watchVat ? Math.round(baseAmount * VAT_RATE * 100) / 100 : 0
   const totalAmount = baseAmount + vatAmount
 
+  // Auto-fill monthly_rate from selected vehicle (only when creating, not editing)
   useEffect(() => {
-    if (watchVehicle) {
+    if (watchVehicle && !editingId) {
       const v = vehicles.find(v => v.id === watchVehicle)
       if (v) setValue('monthly_rate', v.monthly_rate)
     }
@@ -88,7 +90,20 @@ export default function Contracts() {
   }
 
   function openEdit(c: Contract) {
-    reset({ ...c })
+    reset({
+      vehicle_id: c.vehicle_id,
+      customer_id: c.customer_id,
+      start_date: c.start_date,
+      end_date: c.end_date,
+      monthly_rate: c.monthly_rate,
+      deposit_amount: c.deposit_amount,
+      vat_applied: c.vat_applied,
+      status: c.status,
+      km_start: c.km_start,
+      km_end: c.km_end ?? undefined,
+      notes: c.notes ?? undefined,
+      contract_number: c.contract_number ?? undefined,
+    })
     setEditingId(c.id)
     setModalOpen(true)
   }
@@ -100,20 +115,35 @@ export default function Contracts() {
       const base = mths * Number(data.monthly_rate)
       const total = data.vat_applied ? Math.round(base * (1 + VAT_RATE) * 100) / 100 : base
       const payload = {
-        ...data,
+        vehicle_id: data.vehicle_id,
+        customer_id: data.customer_id,
+        start_date: data.start_date,
+        end_date: data.end_date,
         monthly_rate: Number(data.monthly_rate),
         deposit_amount: Number(data.deposit_amount),
+        vat_applied: Boolean(data.vat_applied),
+        status: data.status,
         km_start: Number(data.km_start),
         km_end: data.km_end ? Number(data.km_end) : null,
+        notes: data.notes || null,
         total_amount: total,
-        vat_applied: Boolean(data.vat_applied),
       }
+
       if (editingId) {
-        await supabase.from('contracts').update(payload).eq('id', editingId)
+        const { error } = await supabase.from('contracts').update(payload).eq('id', editingId)
+        if (error) {
+          alert(`Güncelleme hatası: ${error.message}`)
+          return
+        }
       } else {
-        await supabase.from('contracts').insert(payload)
+        const { error } = await supabase.from('contracts').insert(payload)
+        if (error) {
+          alert(`Kayıt hatası: ${error.message}`)
+          return
+        }
         await supabase.from('vehicles').update({ status: 'kirada' }).eq('id', data.vehicle_id)
       }
+
       await fetchAll()
       setModalOpen(false)
     } finally {
@@ -132,12 +162,12 @@ export default function Contracts() {
 
   const vehicleOptions = vehicles.map(v => ({
     value: v.id,
-    label: v.plate_number + ' – ' + v.brand + ' ' + v.model,
+    label: `${v.plate_number} – ${v.brand} ${v.model}`,
   }))
 
   const customerOptions = customers.map(c => ({
     value: c.id,
-    label: c.full_name + ' (' + c.phone + ')',
+    label: `${c.full_name} (${c.phone})`,
   }))
 
   const filtered = contracts.filter(c =>
@@ -155,6 +185,7 @@ export default function Contracts() {
         </div>
         <Button onClick={openAdd}><Plus size={16} /> Sözleşme Ekle</Button>
       </div>
+
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -164,6 +195,7 @@ export default function Contracts() {
           className="w-full max-w-sm pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
         />
       </div>
+
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-slate-400 text-sm">Yükleniyor...</div>
@@ -228,32 +260,79 @@ export default function Contracts() {
           </table>
         )}
       </div>
+
+      {/* Add/Edit Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Sözleşme Düzenle' : 'Yeni Sözleşme'} size="xl">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Araç *" options={[{ value: '', label: '-- Araç seçin --' }, ...vehicleOptions]} {...register('vehicle_id', { required: 'Araç seçin' })} error={errors.vehicle_id?.message} />
-            <Select label="Müşteri *" options={[{ value: '', label: '-- Müşteri seçin --' }, ...customerOptions]} {...register('customer_id', { required: 'Müşteri seçin' })} error={errors.customer_id?.message} />
+            <Select
+              label="Araç *"
+              options={[{ value: '', label: '-- Araç seçin --' }, ...vehicleOptions]}
+              {...register('vehicle_id', { required: 'Araç seçin' })}
+              error={errors.vehicle_id?.message}
+            />
+            <Select
+              label="Müşteri *"
+              options={[{ value: '', label: '-- Müşteri seçin --' }, ...customerOptions]}
+              {...register('customer_id', { required: 'Müşteri seçin' })}
+              error={errors.customer_id?.message}
+            />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <Input label="Başlangıç Tarihi *" type="date" {...register('start_date', { required: 'Zorunlu alan' })} error={errors.start_date?.message} />
             <Input label="Bitiş Tarihi *" type="date" {...register('end_date', { required: 'Zorunlu alan' })} error={errors.end_date?.message} />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Aylık Ücret (₺, KDV hariç) *" type="number" step="0.01" placeholder="10000" {...register('monthly_rate', { required: 'Zorunlu alan' })} error={errors.monthly_rate?.message} />
+            <Input
+              label="Aylık Ücret (₺, KDV hariç) *"
+              type="number"
+              step="0.01"
+              placeholder="10000"
+              {...register('monthly_rate', { required: 'Zorunlu alan' })}
+              error={errors.monthly_rate?.message}
+            />
             <Input label="Depozito (₺)" type="number" step="0.01" {...register('deposit_amount')} />
           </div>
+
+          {/* VAT toggle */}
           <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <input type="checkbox" id="vat_applied" {...register('vat_applied')} className="w-4 h-4 accent-amber-500 cursor-pointer" />
-            <label htmlFor="vat_applied" className="text-sm font-medium text-amber-800 cursor-pointer select-none">KDV Ekle (%20)</label>
+            <input
+              type="checkbox"
+              id="vat_applied"
+              {...register('vat_applied')}
+              className="w-4 h-4 accent-amber-500 cursor-pointer"
+            />
+            <label htmlFor="vat_applied" className="text-sm font-medium text-amber-800 cursor-pointer select-none">
+              KDV Ekle (%20)
+            </label>
           </div>
+
+          {/* Computed totals */}
           {months > 0 && Number(watchRate) > 0 && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5 text-sm">
-              <div className="flex justify-between text-slate-600"><span>Süre</span><span className="font-medium">{months} ay</span></div>
-              <div className="flex justify-between text-slate-600"><span>KDV hariç toplam ({months} × {formatCurrency(Number(watchRate))})</span><span className="font-medium">{formatCurrency(baseAmount)}</span></div>
-              {watchVat && (<div className="flex justify-between text-amber-700"><span>KDV (%20)</span><span className="font-medium">+ {formatCurrency(vatAmount)}</span></div>)}
-              <div className="flex justify-between text-slate-800 font-semibold border-t border-slate-200 pt-1.5 mt-1"><span>Toplam Tutar</span><span>{formatCurrency(totalAmount)}</span></div>
+              <div className="flex justify-between text-slate-600">
+                <span>Süre</span>
+                <span className="font-medium">{months} ay</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>KDV hariç toplam ({months} × {formatCurrency(Number(watchRate))})</span>
+                <span className="font-medium">{formatCurrency(baseAmount)}</span>
+              </div>
+              {watchVat && (
+                <div className="flex justify-between text-amber-700">
+                  <span>KDV (%20)</span>
+                  <span className="font-medium">+ {formatCurrency(vatAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-800 font-semibold border-t border-slate-200 pt-1.5 mt-1">
+                <span>Toplam Tutar</span>
+                <span>{formatCurrency(totalAmount)}</span>
+              </div>
             </div>
           )}
+
           <div className="grid grid-cols-3 gap-4">
             <Input label="Başlangıç KM" type="number" {...register('km_start')} />
             <Input label="Bitiş KM" type="number" {...register('km_end')} />
@@ -266,7 +345,15 @@ export default function Contracts() {
           </div>
         </form>
       </Modal>
-      <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={deleteContract} title="Sözleşme Sil" message="Bu sözleşmeyi silmek istediğinize emin misiniz?" loading={saving} />
+
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={deleteContract}
+        title="Sözleşme Sil"
+        message="Bu sözleşmeyi silmek istediğinize emin misiniz?"
+        loading={saving}
+      />
     </div>
   )
 }
