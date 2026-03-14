@@ -42,7 +42,7 @@ export default function Vehicles() {
   const [saving, setSaving] = useState(false)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
-    defaultValues: { status: 'musait', fuel_type: 'benzin', transmission: 'manuel', km: 0 }
+    defaultValues: { status: 'musait', fuel_type: 'benzin', transmission: 'manuel', km: 0, monthly_rate: 0 }
   })
 
   async function fetchVehicles() {
@@ -63,7 +63,7 @@ export default function Vehicles() {
   async function onSubmit(data: FormData) {
     setSaving(true)
     try {
-      const payload = { ...data, daily_rate: Number(data.daily_rate), km: Number(data.km), year: Number(data.year) }
+      const payload = { ...data, monthly_rate: Number(data.monthly_rate), km: Number(data.km), year: Number(data.year) }
       if (editingId) {
         await supabase.from('vehicles').update(payload).eq('id', editingId)
       } else {
@@ -101,7 +101,6 @@ export default function Vehicles() {
         <Button onClick={openAdd}><Plus size={16} /> Araç Ekle</Button>
       </div>
 
-      {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -112,7 +111,6 @@ export default function Vehicles() {
         />
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-slate-400 text-sm">Yükleniyor...</div>
@@ -129,7 +127,7 @@ export default function Vehicles() {
                 <th className="px-4 py-3 font-medium text-slate-500">Araç</th>
                 <th className="px-4 py-3 font-medium text-slate-500">Yakıt / Vites</th>
                 <th className="px-4 py-3 font-medium text-slate-500">Durum</th>
-                <th className="px-4 py-3 font-medium text-slate-500">Günlük Ücret</th>
+                <th className="px-4 py-3 font-medium text-slate-500">Aylık Ücret</th>
                 <th className="px-4 py-3 font-medium text-slate-500">KM</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -148,7 +146,7 @@ export default function Vehicles() {
                   <td className="px-4 py-3">
                     <Badge label={vehicleStatusLabel[v.status]} className={vehicleStatusColor[v.status]} />
                   </td>
-                  <td className="px-4 py-3 text-slate-700 font-medium">{formatCurrency(v.daily_rate)}</td>
+                  <td className="px-4 py-3 text-slate-700 font-medium">{formatCurrency(v.monthly_rate)}</td>
                   <td className="px-4 py-3 text-slate-600">{v.km?.toLocaleString('tr-TR')} km</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
@@ -167,7 +165,6 @@ export default function Vehicles() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Araç Düzenle' : 'Yeni Araç'} size="lg">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -180,7 +177,7 @@ export default function Vehicles() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Renk" placeholder="Beyaz" {...register('color')} />
-            <Input label="Günlük Ücret (₺) *" type="number" step="0.01" placeholder="500" {...register('daily_rate', { required: 'Zorunlu alan' })} error={errors.daily_rate?.message} />
+            <Input label="Aylık Ücret (₺) *" type="number" step="0.01" placeholder="10000" {...register('monthly_rate', { required: 'Zorunlu alan' })} error={errors.monthly_rate?.message} />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Select label="Yakıt Tipi" options={fuelOptions} {...register('fuel_type')} />
