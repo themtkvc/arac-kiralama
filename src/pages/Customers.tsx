@@ -36,9 +36,17 @@ export default function Customers() {
     setSaving(true)
     try {
       if (editingId) {
-        await supabase.from('customers').update(data).eq('id', editingId)
+        const { error } = await supabase.from('customers').update(data).eq('id', editingId)
+        if (error) {
+          alert(`Güncelleme hatası: ${error.message}`)
+          return
+        }
       } else {
-        await supabase.from('customers').insert(data)
+        const { error } = await supabase.from('customers').insert(data)
+        if (error) {
+          alert(`Kayıt hatası: ${error.message}`)
+          return
+        }
       }
       await fetchCustomers()
       setModalOpen(false)
