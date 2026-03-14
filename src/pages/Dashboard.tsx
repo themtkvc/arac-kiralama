@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Car, Users, FileText, TrendingUp, AlertCircle, Clock } from 'lucide-react'
+import { Car, Users, FileText, TrendingUp, AlertCircle, Clock, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate } from '../lib/utils'
+import { formatCurrency, formatDate, calcRealizedRevenue, calcExpectedRevenue } from '../lib/utils'
 import type { DashboardStats, Contract } from '../types'
 
 function StatCard({ icon: Icon, label, value, sub, color }: {
@@ -32,7 +32,8 @@ export default function Dashboard() {
     totalVehicles: 0,
     availableVehicles: 0,
     activeContracts: 0,
-    monthlyRevenue: 0,
+    realizedRevenue: 0,
+    expectedRevenue: 0,
     pendingPayments: 0,
     overduePayments: 0,
   })
@@ -45,7 +46,7 @@ export default function Dashboard() {
       try {
         const [vehiclesRes, contractsRes, paymentsRes, recentRes] = await Promise.all([
           supabase.from('vehicles').select('status'),
-          supabase.from('contracts').select('status'),
+          supabase.from('contracts').select('status, start_date, end_date, total_amount'),
           supabase.from('payments').select('amount, status, payment_date'),
           supabase
             .from('contracts')
@@ -58,18 +59,15 @@ export default function Dashboard() {
         const contracts = contractsRes.data || []
         const payments = paymentsRes.data || []
 
-        const now = new Date()
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-
-        const monthlyRevenue = payments
-          .filter(p => p.status === 'odendi' && p.payment_date >= startOfMonth)
-          .reduce((sum, p) => sum + p.amount, 0)
+        const realizedRevenue = calcRealizedRevenue(contracts)
+        const expectedRevenue = calcExpectedRevenue(contracts)
 
         setStats({
           totalVehicles: vehicles.length,
           availableVehicles: vehicles.filter(v => v.status === 'musait').length,
           activeContracts: contracts.filter(c => c.status === 'aktif').length,
-          monthlyRevenue,
+          realizedRevenue,
+          expectedRevenue,
           pendingPayments: payments.filter(p => p.status === 'bekliyor').length,
           overduePayments: payments.filter(p => p.status === 'gecikti').length,
         })
@@ -104,7 +102,7 @@ export default function Dashboard() {
 
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm animate-pulse">
               <div className="h-4 bg-slate-100 rounded w-24 mb-3" />
               <div className="h-8 bg-slate-100 rounded w-16" />
@@ -112,17 +110,47 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          <StatCard icon={Car} label="Toplam Araç" value={stats.totalVehicles} sub={`${stats.availableVehicles} müsait`} color="bg-sky-100 text-sky-600" />
-          <StatCard icon={FileText} label="Aktif Sözleşme" value={stats.activeContracts} color="bg-violet-100 text-violet-600" />
-          <StatCard icon={TrendingUp} label="Bu Ay Gelir" value={formatCurrency(stats.monthlyRevenue)} color="bg-emerald-100 text-emerald-600" />
-          <StatCard icon={Users} label="Müsait Araç" value={stats.availableVehicles} sub={`${stats.totalVehicles} araçtan`} color="bg-amber-100 text-amber-600" />
-          <StatCard icon={Clock} label="Bekleyen Ödeme" value={stats.pendingPayments} color="bg-orange-100 text-orange-600" />
-          <StatCard icon={AlertCircle} label="Gecikmiş Ödeme" value={stats.overduePayments} color="bg-red-100 text-red-600" />
-        </div>
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <StatCard icon={Car} label="Toplam Araç" value={stats.totalVehicles} sub={stats.availableVehicles + ' müsait'} color="bg-sky-100 text-sky-600" />
+            <StatCard icon={FileText} label="Aktif Sözleşme" value={stats.activeContracts} color="bg-violet-100 text-violet-600" />
+            <StatCard icon={Users} label="Müsait Araç" value={stats.availableVehicles} sub={stats.totalVehicles + ' araçtan'} color="bg-amber-100 text-amber-600" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <div className="bg-white rounded-xl p-5 border border-emerald-100 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-slate-500 mb-1">Gerçekleşmiş Gelir</p>
+                  <p className="text-2xl font-bold text-emerald-700">{formatCurrency(stats.realizedRevenue)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Bugüne kadar tamamlanan kira dönemi geliri</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
+                  <CheckCircle size={20} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-5 border border-blue-100 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-slate-500 mb-1">Beklenen Gelir</p>
+                  <p className="text-2xl font-bold text-blue-700">{formatCurrency(stats.expectedRevenue)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Aktif sözleşmelerin kalan kira toplamı</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600">
+                  <TrendingUp size={20} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <StatCard icon={Clock} label="Bekleyen Ödeme" value={stats.pendingPayments} color="bg-orange-100 text-orange-600" />
+            <StatCard icon={AlertCircle} label="Gecikmis Ödeme" value={stats.overduePayments} color="bg-red-100 text-red-600" />
+          </div>
+        </>
       )}
 
-      {/* Son Sözleşmeler */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="px-6 py-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-800">Son Sözleşmeler</h2>
