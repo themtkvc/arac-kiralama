@@ -65,9 +65,17 @@ export default function Vehicles() {
     try {
       const payload = { ...data, monthly_rate: Number(data.monthly_rate), km: Number(data.km), year: Number(data.year) }
       if (editingId) {
-        await supabase.from('vehicles').update(payload).eq('id', editingId)
+        const { error } = await supabase.from('vehicles').update(payload).eq('id', editingId)
+        if (error) {
+          alert(`Güncelleme hatası: ${error.message}`)
+          return
+        }
       } else {
-        await supabase.from('vehicles').insert(payload)
+        const { error } = await supabase.from('vehicles').insert(payload)
+        if (error) {
+          alert(`Kayıt hatası: ${error.message}`)
+          return
+        }
       }
       await fetchVehicles()
       setModalOpen(false)
@@ -101,6 +109,7 @@ export default function Vehicles() {
         <Button onClick={openAdd}><Plus size={16} /> Araç Ekle</Button>
       </div>
 
+      {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -111,6 +120,7 @@ export default function Vehicles() {
         />
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-slate-400 text-sm">Yükleniyor...</div>
@@ -165,6 +175,7 @@ export default function Vehicles() {
         )}
       </div>
 
+      {/* Add/Edit Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? 'Araç Düzenle' : 'Yeni Araç'} size="lg">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
