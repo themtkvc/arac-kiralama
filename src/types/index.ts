@@ -12,7 +12,7 @@ export interface Vehicle {
   fuel_type: FuelType
   transmission: Transmission
   status: VehicleStatus
-  daily_rate: number
+  monthly_rate: number
   km: number
   notes?: string
   created_at: string
@@ -42,9 +42,10 @@ export interface Contract {
   customer_id: string
   start_date: string
   end_date: string
-  daily_rate: number
+  monthly_rate: number
   total_amount: number
   deposit_amount: number
+  vat_applied: boolean
   status: ContractStatus
   km_start: number
   km_end?: number
@@ -78,7 +79,8 @@ export interface DashboardStats {
   totalVehicles: number
   availableVehicles: number
   activeContracts: number
-  monthlyRevenue: number
+  realizedRevenue: number
+  expectedRevenue: number
   pendingPayments: number
   overduePayments: number
 }
