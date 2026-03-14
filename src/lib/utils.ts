@@ -1,5 +1,7 @@
-import { format, differenceInDays, parseISO } from 'date-fns'
+import { format, differenceInDays, differenceInMonths, parseISO } from 'date-fns'
 import { tr } from 'date-fns/locale'
+
+export const VAT_RATE = 0.20
 
 export function formatDate(date: string | Date): string {
   const d = typeof date === 'string' ? parseISO(date) : date
@@ -18,9 +20,47 @@ export function calcDays(startDate: string, endDate: string): number {
   return differenceInDays(parseISO(endDate), parseISO(startDate)) + 1
 }
 
-export function calcTotalAmount(dailyRate: number, startDate: string, endDate: string): number {
-  const days = calcDays(startDate, endDate)
-  return days * dailyRate
+export function calcMonths(startDate: string, endDate: string): number {
+  return differenceInMonths(parseISO(endDate), parseISO(startDate))
+}
+
+export function calcTotalAmount(monthlyRate: number, startDate: string, endDate: string, vatApplied = false): number {
+  const months = calcMonths(startDate, endDate)
+  const base = months * monthlyRate
+  return vatApplied ? Math.round(base * (1 + VAT_RATE) * 100) / 100 : base
+}
+
+export function calcRealizedRevenue(contracts: { start_date: string; end_date: string; total_amount: number; status: string }[]): number {
+  const today = new Date()
+  return contracts.reduce((sum, c) => {
+    if (c.status === 'iptal') return sum
+    const start = parseISO(c.start_date)
+    const end = parseISO(c.end_date)
+    const totalMonths = differenceInMonths(end, start)
+    if (totalMonths <= 0) return sum
+    if (end <= today) {
+      return sum + c.total_amount
+    } else if (start < today) {
+      const monthsPassed = differenceInMonths(today, start)
+      return sum + (c.total_amount * monthsPassed / totalMonths)
+    }
+    return sum
+  }, 0)
+}
+
+export function calcExpectedRevenue(contracts: { start_date: string; end_date: string; total_amount: number; status: string }[]): number {
+  const today = new Date()
+  return contracts.reduce((sum, c) => {
+    if (c.status !== 'aktif') return sum
+    const start = parseISO(c.start_date)
+    const end = parseISO(c.end_date)
+    if (end <= today) return sum
+    const totalMonths = differenceInMonths(end, start)
+    if (totalMonths <= 0) return sum
+    const effectiveStart = start < today ? today : start
+    const monthsRemaining = differenceInMonths(end, effectiveStart)
+    return sum + (c.total_amount * monthsRemaining / totalMonths)
+  }, 0)
 }
 
 export const vehicleStatusLabel: Record<string, string> = {
