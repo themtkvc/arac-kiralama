@@ -113,9 +113,17 @@ export default function Payments() {
     try {
       const payload = { ...data, amount: Number(data.amount) }
       if (editingId) {
-        await supabase.from('payments').update(payload).eq('id', editingId)
+        const { error } = await supabase.from('payments').update(payload).eq('id', editingId)
+        if (error) {
+          alert(`Güncelleme hatası: ${error.message}`)
+          return
+        }
       } else {
-        await supabase.from('payments').insert(payload)
+        const { error } = await supabase.from('payments').insert(payload)
+        if (error) {
+          alert(`Kayıt hatası: ${error.message}`)
+          return
+        }
       }
       await fetchAll()
       setModalOpen(false)
